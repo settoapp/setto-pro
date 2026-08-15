@@ -85,13 +85,14 @@ export default function CoachCalendarScreen({ navigation }) {
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     setUserId(user.id);
     const startDate = weekDates[0].toISOString().split('T')[0];
     const endDate = weekDates[6].toISOString().split('T')[0];
 
     const { data: bookingData } = await supabase
       .from('bookings')
-      .select('*, profiles!bookings_client_id_fkey(full_name)')
+      .select('*, profiles!bookings_client_id_fkey(full_name), gyms(name)')
       .eq('coach_id', user.id)
       .gte('date', startDate)
       .lte('date', endDate)
@@ -181,14 +182,17 @@ export default function CoachCalendarScreen({ navigation }) {
   }
 
   async function handleManualBooking() {
+    console.log('handleManualBooking called', { selectedSlot, showNewClient, newClientName, userId });
     if (!selectedSlot) return;
     let clientId = selectedClient?.id;
     if (showNewClient) {
       if (!newClientName) { Alert.alert('Eroare', 'Introdu numele clientului.'); return; }
+      const newId = crypto.randomUUID();
       const { data: newProfile, error: profileError } = await supabase
         .from('profiles')
-        .insert({ full_name: newClientName, phone: newClientPhone, role: 'client' })
+        .insert({ id: newId, full_name: newClientName, phone: newClientPhone, role: 'client' })
         .select().single();
+      console.log('New profile result:', newProfile, profileError);
       if (profileError) { Alert.alert('Eroare', profileError.message); return; }
       clientId = newProfile.id;
     }
@@ -202,6 +206,7 @@ export default function CoachCalendarScreen({ navigation }) {
       day_of_week: selectedSlot.dayOfWeek,
       status: 'confirmed',
       session_type: sessionType,
+      gym_id: selectedSlot.gymId || null,
     });
     if (!error) {
       setModal(null);
@@ -276,12 +281,19 @@ export default function CoachCalendarScreen({ navigation }) {
     setBlockEndDate('');
     setBlockStartTime(startTime);
     setBlockEndTime(endTime);
+    const availForHour = getAvailabilityForDate(date).find(a => {
+      const startH = parseInt(a.start_time.slice(0, 2));
+      const endH = parseInt(a.end_time.slice(0, 2));
+      return hour >= startH && hour < endH;
+    });
+
     setSelectedSlot({
       date: dateStr,
       startTime,
       endTime,
       dayOfWeek: (date.getDay() + 6) % 7,
       displayDate: `${date.getDate()} ${MONTHS[date.getMonth()]}`,
+      gymId: availForHour?.gym_id || null,
     });
     setModal('slot');
   }
@@ -546,6 +558,9 @@ const renderMobileView = () => {
                     return (
                       <View key={ai} style={[styles.availBlock, { top: topOffset, height }]} pointerEvents="none">
                         <Text style={styles.availBlockTime}>{slot.start_time.slice(0, 5)}</Text>
+                        {slot.gyms?.name && height >= 40 && (
+                          <Text style={styles.availBlockGym} numberOfLines={1}>{slot.gyms.name}</Text>
+                        )}
                       </View>
                     );
                   })}
@@ -563,6 +578,11 @@ const renderMobileView = () => {
                       >
                         <Text style={styles.bookingName} numberOfLines={1}>{booking.profiles?.full_name || 'Client'}</Text>
                         {height >= 40 && <Text style={styles.bookingTime}>{booking.start_time?.slice(0, 5)} - {booking.end_time?.slice(0, 5)}</Text>}
+                        {height >= 30 && booking.gyms?.name && (
+                          <Text style={styles.availBlockGym} numberOfLines={1}>
+                            {booking.gyms.name}
+                          </Text>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -764,7 +784,7 @@ const styles = StyleSheet.create({
   gymLabel: { fontSize: 9, color: colors.primary, fontWeight: '600', marginTop: 2, textAlign: 'center' },
   gridScroll: { flex: 1 },
   hourText: { fontSize: 14, color: colors.textPrimary, paddingLeft: 4, fontWeight: '700', lineHeight: 20 },
-  availBlock: { position: 'absolute', left: 1, right: 1, backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: colors.border, padding: 2, zIndex: 1 },
+  availBlock: { position: 'absolute', left: 1, right: 1, backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: colors.border, padding: 4, zIndex: 1 },
   availBlockTime: { fontSize: 12, color: colors.textPrimary, fontWeight: '600' },
   availBlockGym: { fontSize: 10, color: colors.primary, fontWeight: '500' },
   bookingBlock: { position: 'absolute', left: 1, right: 1, borderRadius: 4, padding: 4, zIndex: 10 },
