@@ -71,9 +71,9 @@ export default function ClientProfileScreen({ route, navigation }) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Back */}
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Înapoi</Text>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('CoachHome')}>
+            <Text style={styles.backText}>← Înapoi</Text>
+          </TouchableOpacity>
 
         {/* Avatar */}
         <View style={styles.hero}>

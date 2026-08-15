@@ -74,10 +74,10 @@ export default function CoachProfileSetupScreen({ navigation }) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+<TouchableOpacity onPress={() => navigation.navigate('CoachHome')}>
             <Text style={styles.backText}>← Înapoi</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Profilul tău</Text>
+                    <Text style={styles.title}>Profilul tău</Text>
           <Text style={styles.subtitle}>Completează informațiile pentru clienți</Text>
         </View>
 

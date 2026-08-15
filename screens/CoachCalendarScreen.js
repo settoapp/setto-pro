@@ -457,16 +457,16 @@ const renderMobileView = () => {
       </View>
     );
   };
-  
+
   // ---- DESKTOP VIEW ----
   const renderDesktopView = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+<TouchableOpacity onPress={() => navigation.navigate('CoachHome')}>
             <Text style={styles.backText}>← Înapoi</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Calendar</Text>
+                    <Text style={styles.title}>Calendar</Text>
           <View style={{ width: 60 }} />
         </View>
 

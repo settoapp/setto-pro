@@ -50,7 +50,7 @@ export default function CoachBookingsScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => navigation.navigate('CoachHome')}>
             <Text style={styles.backText}>← Înapoi</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Rezervări</Text>

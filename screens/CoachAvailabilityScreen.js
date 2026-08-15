@@ -129,9 +129,10 @@ export default function CoachAvailabilityScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => navigation.navigate('CoachHome')}>
             <Text style={styles.backText}>← Înapoi</Text>
           </TouchableOpacity>
+          
           <Text style={styles.title}>Disponibilitate</Text>
           <Text style={styles.subtitle}>Setează programul tău săptămânal</Text>
         </View>
