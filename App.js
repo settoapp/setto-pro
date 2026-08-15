@@ -49,8 +49,8 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={LoginScreen} />
+<Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, gestureEnabled: true }}>
+          <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="CoachHome" component={CoachHomeScreen} />
         <Stack.Screen name="CoachProfileSetup" component={CoachProfileSetupScreen} />
