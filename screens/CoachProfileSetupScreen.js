@@ -168,7 +168,7 @@ export default function CoachProfileSetupScreen({ navigation }) {
         >
           <Text style={styles.buttonText}>{loading ? 'Se salvează...' : 'Salvează profilul'}</Text>
         </TouchableOpacity>
-</ScrollView>
+      </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
       );
