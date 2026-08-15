@@ -12,6 +12,7 @@ export default function CoachProfileSetupScreen({ navigation }) {
   const [price, setPrice] = useState('');
   const [gyms, setGyms] = useState([]);
   const [selectedGyms, setSelectedGyms] = useState([]);
+  const [gymSearch, setGymSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -23,11 +24,12 @@ export default function CoachProfileSetupScreen({ navigation }) {
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
       if (profile?.full_name) setFullName(profile.full_name);
 
-      const { data: coach } = await supabase.from('coaches').select('*').eq('id', user.id).single();
+      const { data: coach } = await supabase.from('coaches').select('*').eq('id', user.id).maybeSingle();
       if (coach) {
         if (coach.sport_types?.[0]) setSport(coach.sport_types[0]);
         if (coach.bio) setBio(coach.bio);
         if (coach.price_per_session) setPrice(String(coach.price_per_session));
+        if (coach.gym_ids) setSelectedGyms(coach.gym_ids);
       }
     }
     load();
@@ -56,7 +58,8 @@ export default function CoachProfileSetupScreen({ navigation }) {
       sport_types: [sport],
       bio,
       price_per_session: parseFloat(price),
-    });
+      gym_ids: selectedGyms.length > 0 ? selectedGyms : null,
+    }, { onConflict: 'id' });
 
     setLoading(false);
 
@@ -72,7 +75,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backText}>← Înapoi</Text>
@@ -81,7 +83,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
           <Text style={styles.subtitle}>Completează informațiile pentru clienți</Text>
         </View>
 
-        {/* Nume */}
         <Text style={styles.label}>Nume complet</Text>
         <TextInput
           style={styles.input}
@@ -91,7 +92,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
           onChangeText={setFullName}
         />
 
-        {/* Sport */}
         <Text style={styles.label}>Sport</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
           {SPORTS.map(s => (
@@ -105,11 +105,10 @@ export default function CoachProfileSetupScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {/* Bio */}
         <Text style={styles.label}>Bio</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Descrie-te pe scurt — experiența ta, specializările, stilul de antrenament..."
+          placeholder="Descrie-te pe scurt..."
           placeholderTextColor={colors.textSecondary}
           value={bio}
           onChangeText={setBio}
@@ -118,7 +117,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
           textAlignVertical="top"
         />
 
-        {/* Preț */}
         <Text style={styles.label}>Preț per sesiune (lei)</Text>
         <TextInput
           style={styles.input}
@@ -129,25 +127,51 @@ export default function CoachProfileSetupScreen({ navigation }) {
           keyboardType="numeric"
         />
 
-        {/* Săli */}
         <Text style={styles.label}>Săli unde activezi</Text>
-        {gyms.map(gym => (
-          <TouchableOpacity
-            key={gym.id}
-            style={[styles.gymCard, selectedGyms.includes(gym.id) && styles.gymCardSelected]}
-            onPress={() => toggleGym(gym.id)}
-          >
-            <View>
-              <Text style={[styles.gymName, selectedGyms.includes(gym.id) && styles.gymNameSelected]}>{gym.name}</Text>
-              <Text style={styles.gymCity}>{gym.city}</Text>
-            </View>
-            {selectedGyms.includes(gym.id) && (
-              <View style={styles.checkmark}>
-                <Text style={styles.checkmarkText}>✓</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
+        <TextInput
+          style={styles.input}
+          placeholder="Caută sala..."
+          placeholderTextColor={colors.textSecondary}
+          value={gymSearch}
+          onChangeText={setGymSearch}
+        />
+
+        {selectedGyms.length > 0 && (
+          <View style={{ marginBottom: 8 }}>
+            {selectedGyms.map(gymId => {
+              const gym = gyms.find(g => g.id === gymId);
+              return (
+                <View key={gymId} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0FDFA', borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: colors.primary }}>
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: colors.primaryDark }}>{gym?.name}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{gym?.address}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => toggleGym(gymId)}>
+                    <Text style={{ fontSize: 18, color: colors.textSecondary }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {gymSearch.length > 0 && (
+          <ScrollView style={{ maxHeight: 250, marginBottom: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}>
+            {gyms.filter(g =>
+              g.name.toLowerCase().includes(gymSearch.toLowerCase()) &&
+              !selectedGyms.includes(g.id)
+            ).map(gym => (
+              <TouchableOpacity
+                key={gym.id}
+                style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }}
+                onPress={() => { toggleGym(gym.id); setGymSearch(''); }}
+              >
+                <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: '500' }}>{gym.name}</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>{gym.address}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -176,13 +200,6 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
   chipTextSelected: { color: '#fff' },
-  gymCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.border, borderRadius: 12, padding: 16, marginBottom: 8 },
-  gymCardSelected: { borderColor: colors.primary, backgroundColor: '#F0FDFA' },
-  gymName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 2 },
-  gymNameSelected: { color: colors.primaryDark },
-  gymCity: { fontSize: 13, color: colors.textSecondary },
-  checkmark: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-  checkmarkText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   button: { backgroundColor: colors.primary, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 28 },
   buttonDisabled: { backgroundColor: colors.textSecondary },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },

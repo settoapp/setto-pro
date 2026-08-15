@@ -6,8 +6,8 @@ import { colors } from '../theme';
 const DAYS_SHORT = ['Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ', 'Du'];
 const MONTHS = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const HOURS = Array.from({ length: 16 }, (_, i) => i + 6);
-const CELL_HEIGHT = 64;
-const HOUR_COL_WIDTH = 48;
+const CELL_HEIGHT = 80;
+const HOUR_COL_WIDTH = 70;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DAY_WIDTH = Math.floor((SCREEN_WIDTH - HOUR_COL_WIDTH) / 7);
 
@@ -694,11 +694,11 @@ const styles = StyleSheet.create({
   dayHeaderCircleToday: { backgroundColor: colors.primary },
   dayHeaderNum: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   dayHeaderNumToday: { color: '#fff' },
-  gymLabel: { fontSize: 9, color: colors.primary, fontWeight: '600', marginTop: 2, textAlign: 'center' },
-  gridScroll: { flex: 1 },
-  hourText: { fontSize: 10, color: colors.textSecondary, paddingLeft: 4 },
+  gridScroll: { flex: 1 },gymLabel: { fontSize: 11, color: colors.primary, fontWeight: '600', marginTop: 2, textAlign: 'center' },
+
+hourText: { fontSize: 14, color: '#1A1A2E', paddingLeft: 4, fontWeight: '700', lineHeight: 20 },
   availBlock: { position: 'absolute', left: 1, right: 1, backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: colors.border, padding: 2, zIndex: 1 },
-  availBlockTime: { fontSize: 8, color: colors.textSecondary },
+availBlockTime: { fontSize: 12, color: colors.textPrimary, fontWeight: '600' },
   bookingBlock: { position: 'absolute', left: 1, right: 1, borderRadius: 4, padding: 3, zIndex: 10 },
   bookingConfirmed: { backgroundColor: '#b7f5c4', borderLeftWidth: 3, borderLeftColor: '#2ecc71' },
   bookingPending: { backgroundColor: '#fff3b0', borderLeftWidth: 3, borderLeftColor: '#f1c40f' },

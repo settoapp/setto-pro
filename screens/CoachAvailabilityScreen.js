@@ -14,7 +14,7 @@ function isValidTime(time) {
 export default function CoachAvailabilityScreen({ navigation }) {
   const [gyms, setGyms] = useState([]);
   const [slots, setSlots] = useState([]);
-  const [selectedDay, setSelectedDay] = useState(0);
+  const [selectedDays, setSelectedDays] = useState([]);
   const [selectedGym, setSelectedGym] = useState(null);
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -23,15 +23,31 @@ export default function CoachAvailabilityScreen({ navigation }) {
   const [duration, setDuration] = useState(60);
   const [customDuration, setCustomDuration] = useState('');
   const [useCustomDuration, setUseCustomDuration] = useState(false);
+  const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [viewDay, setViewDay] = useState(0);
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       setUserId(user.id);
-      const { data: gymData } = await supabase.from('gyms').select('*').order('name');
-      if (gymData) setGyms(gymData);
+
+      const { data: coachData } = await supabase
+        .from('coaches')
+        .select('gym_ids')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (coachData?.gym_ids && coachData.gym_ids.length > 0) {
+        const { data: gymData } = await supabase
+          .from('gyms')
+          .select('*')
+          .in('id', coachData.gym_ids)
+          .order('name');
+        if (gymData) setGyms(gymData);
+      }
+
       const { data: slotData } = await supabase
         .from('availability')
         .select('*, gyms(name)')
@@ -41,6 +57,14 @@ export default function CoachAvailabilityScreen({ navigation }) {
     }
     load();
   }, []);
+
+  function toggleDay(index) {
+    if (selectedDays.includes(index)) {
+      setSelectedDays(selectedDays.filter(d => d !== index));
+    } else {
+      setSelectedDays([...selectedDays, index]);
+    }
+  }
 
   function getFinalDuration() {
     if (useCustomDuration) {
@@ -52,34 +76,46 @@ export default function CoachAvailabilityScreen({ navigation }) {
   }
 
   async function handleAdd() {
+    if (selectedDays.length === 0) { Alert.alert('Eroare', 'Alege cel puțin o zi.'); return; }
     if (!selectedGym) { Alert.alert('Eroare', 'Alege o sală.'); return; }
-    if (!isValidTime(startTime)) { Alert.alert('Eroare', 'Ora de început nu e validă. Ex: 08:45'); return; }
-    if (!isValidTime(endTime)) { Alert.alert('Eroare', 'Ora de sfârșit nu e validă. Ex: 09:45'); return; }
+    if (!isValidTime(startTime)) { Alert.alert('Eroare', 'Ora de început nu e validă.'); return; }
+    if (!isValidTime(endTime)) { Alert.alert('Eroare', 'Ora de sfârșit nu e validă.'); return; }
     if (startTime >= endTime) { Alert.alert('Eroare', 'Ora de sfârșit trebuie să fie după ora de început.'); return; }
     const finalDuration = getFinalDuration();
     if (!finalDuration) { Alert.alert('Eroare', 'Durata trebuie să fie un multiplu de 5 minute.'); return; }
+    if (!price || parseFloat(price) <= 0) { Alert.alert('Eroare', 'Introdu prețul per sesiune.'); return; }
     if (sessionType === 'group' && (!maxParticipants || parseInt(maxParticipants) < 2)) {
       Alert.alert('Eroare', 'Numărul maxim de participanți trebuie să fie cel puțin 2.');
       return;
     }
+
     setLoading(true);
+
+    const inserts = selectedDays.map(day => ({
+      coach_id: userId,
+      gym_id: selectedGym,
+      day_of_week: day,
+      start_time: startTime,
+      end_time: endTime,
+      duration_minutes: finalDuration,
+      session_type: sessionType,
+      max_participants: sessionType === 'group' ? parseInt(maxParticipants) : 1,
+      price: parseFloat(price),
+    }));
+
     const { data, error } = await supabase
       .from('availability')
-      .insert({
-        coach_id: userId,
-        gym_id: selectedGym,
-        day_of_week: selectedDay,
-        start_time: startTime,
-        end_time: endTime,
-        duration_minutes: finalDuration,
-        session_type: sessionType,
-        max_participants: sessionType === 'group' ? parseInt(maxParticipants) : 1,
-      })
-      .select('*, gyms(name)')
-      .single();
+      .insert(inserts)
+      .select('*, gyms(name)');
+
     setLoading(false);
-    if (error) { Alert.alert('Eroare', error.message); }
-    else { setSlots([...slots, data]); }
+
+    if (error) {
+      Alert.alert('Eroare', error.message);
+    } else {
+      setSlots([...slots, ...data]);
+      setSelectedDays([]);
+    }
   }
 
   async function handleDelete(slotId) {
@@ -87,12 +123,11 @@ export default function CoachAvailabilityScreen({ navigation }) {
     if (!error) setSlots(slots.filter(s => s.id !== slotId));
   }
 
-  const slotsForDay = slots.filter(s => s.day_of_week === selectedDay);
+  const slotsForDay = slots.filter(s => s.day_of_week === viewDay);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backText}>← Înapoi</Text>
@@ -101,33 +136,39 @@ export default function CoachAvailabilityScreen({ navigation }) {
           <Text style={styles.subtitle}>Setează programul tău săptămânal</Text>
         </View>
 
-        {/* Zile */}
-        <Text style={styles.label}>Ziua</Text>
+        {/* Zile - selectare multipla */}
+        <Text style={styles.label}>Zilele active <Text style={{ color: colors.textSecondary, fontWeight: '400' }}>(poți selecta mai multe)</Text></Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
           {DAYS.map((day, index) => (
             <TouchableOpacity
               key={index}
-              style={[styles.chip, selectedDay === index && styles.chipSelected]}
-              onPress={() => setSelectedDay(index)}
+              style={[styles.chip, selectedDays.includes(index) && styles.chipSelected]}
+              onPress={() => toggleDay(index)}
             >
-              <Text style={[styles.chipText, selectedDay === index && styles.chipTextSelected]}>{day}</Text>
+              <Text style={[styles.chipText, selectedDays.includes(index) && styles.chipTextSelected]}>{day}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Săli */}
+        {/* Sala */}
         <Text style={styles.label}>Sala</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-          {gyms.map(gym => (
-            <TouchableOpacity
-              key={gym.id}
-              style={[styles.chip, selectedGym === gym.id && styles.chipSelected]}
-              onPress={() => setSelectedGym(gym.id)}
-            >
-              <Text style={[styles.chipText, selectedGym === gym.id && styles.chipTextSelected]}>{gym.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {gyms.length === 0 ? (
+          <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 8 }}>
+            Adaugă săli în profilul tău mai întâi.
+          </Text>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
+            {gyms.map(gym => (
+              <TouchableOpacity
+                key={gym.id}
+                style={[styles.chip, selectedGym === gym.id && styles.chipSelected]}
+                onPress={() => setSelectedGym(gym.id)}
+              >
+                <Text style={[styles.chipText, selectedGym === gym.id && styles.chipTextSelected]}>{gym.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Ora start */}
         <Text style={styles.label}>Ora de început</Text>
@@ -151,7 +192,7 @@ export default function CoachAvailabilityScreen({ navigation }) {
           keyboardType="numbers-and-punctuation"
         />
 
-        {/* Ora sfârșit */}
+        {/* Ora sfarsit */}
         <Text style={styles.label}>Ora de sfârșit</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
           {HOURS.map(hour => (
@@ -235,15 +276,38 @@ export default function CoachAvailabilityScreen({ navigation }) {
           />
         )}
 
+        {/* Pret */}
+        <Text style={styles.label}>Preț per sesiune (lei)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ex: 150"
+          placeholderTextColor={colors.textSecondary}
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="numeric"
+        />
+
         <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleAdd} disabled={loading}>
           <Text style={styles.buttonText}>{loading ? 'Se adaugă...' : '+ Adaugă interval'}</Text>
         </TouchableOpacity>
 
-        {/* Intervale */}
-        <Text style={styles.sectionTitle}>Intervalele tale pentru {DAYS[selectedDay]}</Text>
+        {/* Vizualizare intervale pe zile */}
+        <Text style={styles.sectionTitle}>Vizualizează intervalele</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
+          {DAYS.map((day, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.chip, viewDay === index && styles.chipSelected]}
+              onPress={() => setViewDay(index)}
+            >
+              <Text style={[styles.chipText, viewDay === index && styles.chipTextSelected]}>{day}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         {slotsForDay.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Niciun interval adăugat pentru această zi.</Text>
+            <Text style={styles.emptyText}>Niciun interval pentru {DAYS[viewDay]}.</Text>
           </View>
         ) : (
           slotsForDay.map(slot => (
@@ -252,7 +316,7 @@ export default function CoachAvailabilityScreen({ navigation }) {
                 <Text style={styles.slotTime}>{slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}</Text>
                 <Text style={styles.slotGym}>{slot.gyms?.name}</Text>
                 <Text style={styles.slotMeta}>
-                  {slot.duration_minutes} min · {slot.session_type === 'group' ? `👥 Grup (max ${slot.max_participants})` : '👤 One to One'}
+                  {slot.duration_minutes} min · {slot.session_type === 'group' ? `👥 Grup (max ${slot.max_participants})` : '👤 One to One'} · {slot.price} lei
                 </Text>
               </View>
               <TouchableOpacity onPress={() => handleDelete(slot.id)} style={styles.deleteBtn}>
