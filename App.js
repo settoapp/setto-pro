@@ -15,6 +15,22 @@ import { colors } from './theme';
 
 const Stack = createNativeStackNavigator();
 
+const linking = {
+  prefixes: ['https://pro.setto.ro', 'https://setto-pro.vercel.app', 'http://localhost:8081'],
+  config: {
+    screens: {
+      Login: 'login',
+      Register: 'register',
+      CoachHome: '',
+      CoachProfileSetup: 'profil',
+      CoachAvailability: 'disponibilitate',
+      CoachBookings: 'rezervari',
+      CoachCalendar: 'calendar',
+      ClientProfile: 'client/:clientId',
+    },
+  },
+};
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [initialRoute, setInitialRoute] = useState('Login');
@@ -48,9 +64,9 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-<Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, gestureEnabled: true }}>
-          <Stack.Screen name="Login" component={LoginScreen} />
+    <NavigationContainer linking={linking}>
+      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="CoachHome" component={CoachHomeScreen} />
         <Stack.Screen name="CoachProfileSetup" component={CoachProfileSetupScreen} />
