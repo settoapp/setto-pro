@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, TextInput, Alert } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, TextInput, Alert, Platform } from 'react-native';
 import { supabase } from '../supabase';
 import { colors } from '../theme';
 
@@ -8,8 +8,6 @@ const MONTHS = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', '
 const HOURS = Array.from({ length: 16 }, (_, i) => i + 6);
 const CELL_HEIGHT = 80;
 const HOUR_COL_WIDTH = 70;
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const DAY_WIDTH = Math.floor((SCREEN_WIDTH - HOUR_COL_WIDTH) / 7);
 
 function getWeekDates(weekOffset) {
   const today = new Date();
@@ -31,8 +29,22 @@ function minutesToTime(minutes) {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
+function isSameDay(d1, d2) {
+  return d1.toDateString() === d2.toDateString();
+}
+
+function isPastDay(date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
 export default function CoachCalendarScreen({ navigation }) {
+  const screenWidth = Dimensions.get('window').width;
+  const isMobile = screenWidth < 768;
+
   const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState([]);
   const [blockedSlots, setBlockedSlots] = useState([]);
   const [availability, setAvailability] = useState([]);
@@ -58,6 +70,7 @@ export default function CoachCalendarScreen({ navigation }) {
   const weekDates = getWeekDates(weekOffset);
   const weekLabel = `${weekDates[0].getDate()} - ${weekDates[6].getDate()} ${MONTHS[weekDates[6].getMonth()]}`;
   const startHour = HOURS[0];
+  const DAY_WIDTH = Math.floor((screenWidth - HOUR_COL_WIDTH) / 7);
 
   const filteredClients = clientSearch.length > 0
     ? clients.filter(c =>
@@ -117,10 +130,7 @@ export default function CoachCalendarScreen({ navigation }) {
   }
 
   async function handleStatus(bookingId, newStatus) {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: newStatus })
-      .eq('id', bookingId);
+    const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', bookingId);
     if (!error) {
       setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
       setSelectedBooking(prev => prev ? { ...prev, status: newStatus } : null);
@@ -173,42 +183,26 @@ export default function CoachCalendarScreen({ navigation }) {
   async function handleManualBooking() {
     if (!selectedSlot) return;
     let clientId = selectedClient?.id;
-
     if (showNewClient) {
-      if (!newClientName) {
-        Alert.alert('Eroare', 'Introdu numele clientului.');
-        return;
-      }
+      if (!newClientName) { Alert.alert('Eroare', 'Introdu numele clientului.'); return; }
       const { data: newProfile, error: profileError } = await supabase
         .from('profiles')
         .insert({ full_name: newClientName, phone: newClientPhone, role: 'client' })
-        .select()
-        .single();
-      if (profileError) {
-        Alert.alert('Eroare', profileError.message);
-        return;
-      }
+        .select().single();
+      if (profileError) { Alert.alert('Eroare', profileError.message); return; }
       clientId = newProfile.id;
     }
-
-    if (!clientId) {
-      Alert.alert('Eroare', 'Alege sau adaugă un client.');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('bookings')
-      .insert({
-        coach_id: userId,
-        client_id: clientId,
-        date: selectedSlot.date,
-        start_time: selectedSlot.startTime,
-        end_time: selectedSlot.endTime,
-        day_of_week: selectedSlot.dayOfWeek,
-        status: 'confirmed',
-        session_type: sessionType,
-      });
-
+    if (!clientId) { Alert.alert('Eroare', 'Alege sau adaugă un client.'); return; }
+    const { error } = await supabase.from('bookings').insert({
+      coach_id: userId,
+      client_id: clientId,
+      date: selectedSlot.date,
+      start_time: selectedSlot.startTime,
+      end_time: selectedSlot.endTime,
+      day_of_week: selectedSlot.dayOfWeek,
+      status: 'confirmed',
+      session_type: sessionType,
+    });
     if (!error) {
       setModal(null);
       setSelectedCell(null);
@@ -237,8 +231,7 @@ export default function CoachCalendarScreen({ navigation }) {
   }
 
   function isAvailable(date, hour) {
-    const avails = getAvailabilityForDate(date);
-    return avails.some(a => {
+    return getAvailabilityForDate(date).some(a => {
       const startH = parseInt(a.start_time.slice(0, 2));
       const endH = parseInt(a.end_time.slice(0, 2));
       return hour >= startH && hour < endH;
@@ -254,11 +247,7 @@ export default function CoachCalendarScreen({ navigation }) {
       const duration = avail.duration_minutes || 60;
       let current = startMins;
       while (current + duration <= endMins) {
-        slots.push({
-          ...avail,
-          start_time: minutesToTime(current),
-          end_time: minutesToTime(current + duration),
-        });
+        slots.push({ ...avail, start_time: minutesToTime(current), end_time: minutesToTime(current + duration) });
         current += duration;
       }
     }
@@ -276,8 +265,7 @@ export default function CoachCalendarScreen({ navigation }) {
   }
 
   function handleCellPress(date, hour) {
-    const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
-    if (isPast) return;
+    if (isPastDay(date)) return;
     if (!isAvailable(date, hour)) return;
     const dateStr = date.toISOString().split('T')[0];
     const startTime = minutesToTime(hour * 60);
@@ -298,170 +286,323 @@ export default function CoachCalendarScreen({ navigation }) {
     setModal('slot');
   }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Înapoi</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Calendar</Text>
-        <View style={{ width: 60 }} />
-      </View>
+  // ---- MOBILE VIEW ----
+const renderMobileView = () => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7);
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
 
-      <View style={styles.weekNav}>
-        <TouchableOpacity onPress={() => { setWeekOffset(w => w - 1); setModal(null); setSelectedCell(null); }}>
-          <Text style={styles.navBtn}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.weekLabel}>{weekLabel}</Text>
-        <TouchableOpacity onPress={() => { setWeekOffset(w => w + 1); setModal(null); setSelectedCell(null); }}>
-          <Text style={styles.navBtn}>→</Text>
-        </TouchableOpacity>
-      </View>
+    const dayAvailSlots = getAvailabilityBlocksForDay(selectedDate);
+    const dayBookings = getBookingsForDay(selectedDate);
+    const dayBlocked = getBlockedForDay(selectedDate);
 
-      <View style={styles.daysHeader}>
-        <View style={{ width: HOUR_COL_WIDTH }} />
-        {weekDates.map((date, i) => {
-          const isToday = date.toDateString() === new Date().toDateString();
-          const dayAvails = getAvailabilityForDate(date);
-          const gymNames = [...new Set(dayAvails.map(a => a.gyms?.name).filter(Boolean))];
-          return (
-            <View key={i} style={[styles.dayHeaderCol, { width: DAY_WIDTH }]}>
-              <Text style={styles.dayHeaderName}>{DAYS_SHORT[i]}</Text>
-              <View style={[styles.dayHeaderCircle, isToday && styles.dayHeaderCircleToday]}>
-                <Text style={[styles.dayHeaderNum, isToday && styles.dayHeaderNumToday]}>
-                  {date.getDate()}
-                </Text>
-              </View>
-              {gymNames.length > 0 && (
-                <Text style={styles.gymLabel} numberOfLines={1}>{gymNames.join(', ')}</Text>
-              )}
-            </View>
-          );
-        })}
-      </View>
+    return (
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backText}>← Înapoi</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>
+            {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+          </Text>
+          <View style={{ width: 60 }} />
+        </View>
 
-      <ScrollView style={styles.gridScroll} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row' }}>
-          <View style={{ width: HOUR_COL_WIDTH }}>
-            {HOURS.map(hour => (
-              <View key={hour} style={{ height: CELL_HEIGHT, justifyContent: 'flex-start', paddingTop: 4 }}>
-                <Text style={styles.hourText}>{hour}:00</Text>
-              </View>
-            ))}
-          </View>
+        {/* Navigare saptamana */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 4 }}>
+          <TouchableOpacity onPress={() => { setWeekOffset(w => w - 1); }}>
+            <Text style={{ fontSize: 22, color: colors.primary }}>←</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
+            {days[0]?.getDate()} - {days[6]?.getDate()} {MONTHS[days[6]?.getMonth()]}
+          </Text>
+          <TouchableOpacity onPress={() => { setWeekOffset(w => w + 1); }}>
+            <Text style={{ fontSize: 22, color: colors.primary }}>→</Text>
+          </TouchableOpacity>
+        </View>
 
-          {weekDates.map((date, di) => {
-            const dayBookings = getBookingsForDay(date);
-            const dayBlocked = getBlockedForDay(date);
-            const dayAvailSlots = getAvailabilityBlocksForDay(date);
-            const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
-            const dateStr = date.toISOString().split('T')[0];
-
+        {/* Bara zile */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          {days.map((date, i) => {
+            const isToday = isSameDay(date, today);
+            const isSelected = isSameDay(date, selectedDate);
+            const isPast = isPastDay(date);
+            const dayIndex = (date.getDay() + 6) % 7;
             return (
-              <View key={di} style={{ width: DAY_WIDTH, borderLeftWidth: 1, borderLeftColor: colors.border }}>
-                {HOURS.map(hour => {
-                  const available = isAvailable(date, hour);
-                  const cellKey = `${dateStr}-${hour}`;
-                  const isSelected = selectedCell === cellKey;
-                  return (
-                    <TouchableOpacity
-                      key={hour}
-                      style={{
-                        height: CELL_HEIGHT,
-                        borderBottomWidth: 1,
-                        borderBottomColor: colors.border,
-                        backgroundColor: isSelected
-                          ? colors.accent
-                          : isPast
-                          ? '#f8f8f8'
-                          : available
-                          ? '#fff'
-                          : '#fdf6f0',
-                      }}
-                      onPress={() => handleCellPress(date, hour)}
-                      disabled={!available || isPast}
-                    />
-                  );
-                })}
+              <TouchableOpacity
+                key={i}
+                style={{ alignItems: 'center', flex: 1 }}
+                onPress={() => setSelectedDate(date)}
+              >
+                <Text style={[
+                  { fontSize: 11, marginBottom: 4, fontWeight: '500' },
+                  isPast ? { color: '#ccc' } : isSelected ? { color: colors.primary } : { color: colors.textSecondary }
+                ]}>
+                  {DAYS_SHORT[dayIndex]}
+                </Text>
+                <View style={[
+                  { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+                  isToday && !isSelected && { borderWidth: 2, borderColor: colors.primary },
+                  isSelected && { backgroundColor: colors.primary },
+                ]}>
+                  <Text style={[
+                    { fontSize: 15 },
+                    isPast && { color: '#ccc' },
+                    isSelected && { color: '#fff', fontWeight: '800' },
+                    !isPast && !isSelected && { fontWeight: '700', color: colors.textPrimary },
+                  ]}>
+                    {date.getDate()}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-                {dayAvailSlots.map((slot, ai) => {
-                  const startMins = timeToMinutes(slot.start_time);
-                  const endMins = timeToMinutes(slot.end_time);
-                  const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
-                  const height = (endMins - startMins) * (CELL_HEIGHT / 60);
-                  return (
-                    <View
-                      key={ai}
-                      style={[styles.availBlock, { top: topOffset, height }]}
-                      pointerEvents="none"
-                    >
-                      <Text style={styles.availBlockTime}>
-                        {slot.start_time.slice(0, 5)}
-                      </Text>
-                    </View>
-                  );
-                })}
+        {/* Grid zi */}
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row' }}>
+            <View style={{ width: HOUR_COL_WIDTH }}>
+              {HOURS.map(hour => (
+                <View key={hour} style={{ height: CELL_HEIGHT, justifyContent: 'flex-start', paddingTop: 4 }}>
+                  <Text style={styles.hourText}>{hour}:00</Text>
+                </View>
+              ))}
+            </View>
 
-                {dayBookings.map(booking => {
-                  const startMins = timeToMinutes(booking.start_time);
-                  const endMins = timeToMinutes(booking.end_time);
-                  const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
-                  const height = (endMins - startMins) * (CELL_HEIGHT / 60);
-                  return (
-                    <TouchableOpacity
-                      key={booking.id}
-                      style={[
-                        styles.bookingBlock,
-                        { top: topOffset, height: Math.max(height, 30) },
-                        booking.status === 'confirmed' ? styles.bookingConfirmed : styles.bookingPending,
-                      ]}
-                      onPress={() => { setSelectedBooking(booking); setSelectedCell(null); setModal('booking'); }}
-                    >
-                      <Text style={styles.bookingName} numberOfLines={1}>
-                        {booking.profiles?.full_name || 'Client'}
-                      </Text>
-                      {height >= 40 && (
-                        <Text style={styles.bookingTime}>
-                          {booking.start_time?.slice(0, 5)} - {booking.end_time?.slice(0, 5)}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+            <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border }}>
+              {HOURS.map(hour => {
+                const available = isAvailable(selectedDate, hour);
+                const dateStr = selectedDate.toISOString().split('T')[0];
+                const cellKey = `${dateStr}-${hour}`;
+                const isSelectedCell = selectedCell === cellKey;
+                return (
+                  <TouchableOpacity
+                    key={hour}
+                    style={{
+                      height: CELL_HEIGHT,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      backgroundColor: isSelectedCell
+                        ? colors.accent
+                        : isPastDay(selectedDate)
+                        ? '#f8f8f8'
+                        : available
+                        ? '#fff'
+                        : '#fdf6f0',
+                    }}
+                    onPress={() => handleCellPress(selectedDate, hour)}
+                    disabled={!available || isPastDay(selectedDate)}
+                  />
+                );
+              })}
 
-                {dayBlocked.map(block => {
-                  const startMins = timeToMinutes(block.start_time);
-                  const endMins = timeToMinutes(block.end_time);
-                  const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
-                  const height = (endMins - startMins) * (CELL_HEIGHT / 60);
-                  return (
-                    <TouchableOpacity
-                      key={block.id}
-                      style={[styles.bookingBlock, styles.blockedBlock, { top: topOffset, height: Math.max(height, 30) }]}
-                      onPress={() => { setSelectedBooking(block); setSelectedCell(null); setModal('blocked'); }}
-                    >
-                      <Text style={styles.bookingName} numberOfLines={1}>🔒 Blocat</Text>
-                      {block.reason && <Text style={styles.bookingTime} numberOfLines={1}>{block.reason}</Text>}
-                    </TouchableOpacity>
-                  );
-                })}
+              {dayAvailSlots.map((slot, ai) => {
+                const startMins = timeToMinutes(slot.start_time);
+                const endMins = timeToMinutes(slot.end_time);
+                const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
+                const height = (endMins - startMins) * (CELL_HEIGHT / 60);
+                return (
+                  <View key={ai} style={[styles.availBlock, { top: topOffset, height }]} pointerEvents="none">
+                    <Text style={styles.availBlockTime}>{slot.start_time.slice(0, 5)}</Text>
+                    {slot.gyms?.name && <Text style={styles.availBlockGym} numberOfLines={1}>{slot.gyms.name}</Text>}
+                  </View>
+                );
+              })}
+
+              {dayBookings.map(booking => {
+                const startMins = timeToMinutes(booking.start_time);
+                const endMins = timeToMinutes(booking.end_time);
+                const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
+                const height = (endMins - startMins) * (CELL_HEIGHT / 60);
+                return (
+                  <TouchableOpacity
+                    key={booking.id}
+                    style={[styles.bookingBlock, { top: topOffset, height: Math.max(height, 40) }, booking.status === 'confirmed' ? styles.bookingConfirmed : styles.bookingPending]}
+                    onPress={() => { setSelectedBooking(booking); setSelectedCell(null); setModal('booking'); }}
+                  >
+                    <Text style={styles.bookingName} numberOfLines={1}>{booking.profiles?.full_name || 'Client'}</Text>
+                    <Text style={styles.bookingTime}>{booking.start_time?.slice(0, 5)} - {booking.end_time?.slice(0, 5)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {dayBlocked.map(block => {
+                const startMins = timeToMinutes(block.start_time);
+                const endMins = timeToMinutes(block.end_time);
+                const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
+                const height = (endMins - startMins) * (CELL_HEIGHT / 60);
+                return (
+                  <TouchableOpacity
+                    key={block.id}
+                    style={[styles.bookingBlock, styles.blockedBlock, { top: topOffset, height: Math.max(height, 40) }]}
+                    onPress={() => { setSelectedBooking(block); setSelectedCell(null); setModal('blocked'); }}
+                  >
+                    <Text style={styles.bookingName}>🔒 Blocat</Text>
+                    {block.reason && <Text style={styles.bookingTime}>{block.reason}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </ScrollView>
+
+        {renderModals()}
+      </View>
+    );
+  };
+  
+  // ---- DESKTOP VIEW ----
+  const renderDesktopView = () => {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backText}>← Înapoi</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Calendar</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <View style={styles.weekNav}>
+          <TouchableOpacity onPress={() => { setWeekOffset(w => w - 1); setModal(null); setSelectedCell(null); }}>
+            <Text style={styles.navBtn}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.weekLabel}>{weekLabel}</Text>
+          <TouchableOpacity onPress={() => { setWeekOffset(w => w + 1); setModal(null); setSelectedCell(null); }}>
+            <Text style={styles.navBtn}>→</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.daysHeader}>
+          <View style={{ width: HOUR_COL_WIDTH }} />
+          {weekDates.map((date, i) => {
+            const isToday = isSameDay(date, new Date());
+            const dayAvails = getAvailabilityForDate(date);
+            const gymNames = [...new Set(dayAvails.map(a => a.gyms?.name).filter(Boolean))];
+            return (
+              <View key={i} style={[styles.dayHeaderCol, { width: DAY_WIDTH }]}>
+                <Text style={styles.dayHeaderName}>{DAYS_SHORT[i]}</Text>
+                <View style={[styles.dayHeaderCircle, isToday && styles.dayHeaderCircleToday]}>
+                  <Text style={[styles.dayHeaderNum, isToday && styles.dayHeaderNumToday]}>{date.getDate()}</Text>
+                </View>
+                {gymNames.length > 0 && (
+                  <Text style={styles.gymLabel} numberOfLines={1}>{gymNames.join(', ')}</Text>
+                )}
               </View>
             );
           })}
         </View>
-      </ScrollView>
 
+        <ScrollView style={styles.gridScroll} showsVerticalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row' }}>
+            <View style={{ width: HOUR_COL_WIDTH }}>
+              {HOURS.map(hour => (
+                <View key={hour} style={{ height: CELL_HEIGHT, justifyContent: 'flex-start', paddingTop: 4 }}>
+                  <Text style={styles.hourText}>{hour}:00</Text>
+                </View>
+              ))}
+            </View>
+
+            {weekDates.map((date, di) => {
+              const dayBookings = getBookingsForDay(date);
+              const dayBlocked = getBlockedForDay(date);
+              const dayAvailSlots = getAvailabilityBlocksForDay(date);
+              const past = isPastDay(date);
+              const dateStr = date.toISOString().split('T')[0];
+
+              return (
+                <View key={di} style={{ width: DAY_WIDTH, borderLeftWidth: 1, borderLeftColor: colors.border }}>
+                  {HOURS.map(hour => {
+                    const available = isAvailable(date, hour);
+                    const cellKey = `${dateStr}-${hour}`;
+                    const isSelectedCell = selectedCell === cellKey;
+                    return (
+                      <TouchableOpacity
+                        key={hour}
+                        style={{
+                          height: CELL_HEIGHT,
+                          borderBottomWidth: 1,
+                          borderBottomColor: colors.border,
+                          backgroundColor: isSelectedCell ? colors.accent : past ? '#f8f8f8' : available ? '#fff' : '#fdf6f0',
+                        }}
+                        onPress={() => handleCellPress(date, hour)}
+                        disabled={!available || past}
+                      />
+                    );
+                  })}
+
+                  {dayAvailSlots.map((slot, ai) => {
+                    const startMins = timeToMinutes(slot.start_time);
+                    const endMins = timeToMinutes(slot.end_time);
+                    const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
+                    const height = (endMins - startMins) * (CELL_HEIGHT / 60);
+                    return (
+                      <View key={ai} style={[styles.availBlock, { top: topOffset, height }]} pointerEvents="none">
+                        <Text style={styles.availBlockTime}>{slot.start_time.slice(0, 5)}</Text>
+                      </View>
+                    );
+                  })}
+
+                  {dayBookings.map(booking => {
+                    const startMins = timeToMinutes(booking.start_time);
+                    const endMins = timeToMinutes(booking.end_time);
+                    const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
+                    const height = (endMins - startMins) * (CELL_HEIGHT / 60);
+                    return (
+                      <TouchableOpacity
+                        key={booking.id}
+                        style={[styles.bookingBlock, { top: topOffset, height: Math.max(height, 30) }, booking.status === 'confirmed' ? styles.bookingConfirmed : styles.bookingPending]}
+                        onPress={() => { setSelectedBooking(booking); setSelectedCell(null); setModal('booking'); }}
+                      >
+                        <Text style={styles.bookingName} numberOfLines={1}>{booking.profiles?.full_name || 'Client'}</Text>
+                        {height >= 40 && <Text style={styles.bookingTime}>{booking.start_time?.slice(0, 5)} - {booking.end_time?.slice(0, 5)}</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  {dayBlocked.map(block => {
+                    const startMins = timeToMinutes(block.start_time);
+                    const endMins = timeToMinutes(block.end_time);
+                    const topOffset = (startMins - startHour * 60) * (CELL_HEIGHT / 60);
+                    const height = (endMins - startMins) * (CELL_HEIGHT / 60);
+                    return (
+                      <TouchableOpacity
+                        key={block.id}
+                        style={[styles.bookingBlock, styles.blockedBlock, { top: topOffset, height: Math.max(height, 30) }]}
+                        onPress={() => { setSelectedBooking(block); setSelectedCell(null); setModal('blocked'); }}
+                      >
+                        <Text style={styles.bookingName}>🔒 Blocat</Text>
+                        {block.reason && <Text style={styles.bookingTime}>{block.reason}</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {renderModals()}
+      </View>
+    );
+  };
+
+  const renderModals = () => (
+    <>
       {modal === 'booking' && selectedBooking && (
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalName}>{selectedBooking.profiles?.full_name || 'Client'}</Text>
-              <Text style={styles.modalTime}>
-                {selectedBooking.start_time?.slice(0, 5)} - {selectedBooking.end_time?.slice(0, 5)}
-              </Text>
-              <Text style={styles.modalStatus}>
-                {selectedBooking.status === 'pending' ? '⏳ În așteptare' : '✓ Confirmat'}
-              </Text>
+              <Text style={styles.modalTime}>{selectedBooking.start_time?.slice(0, 5)} - {selectedBooking.end_time?.slice(0, 5)}</Text>
+              <Text style={styles.modalStatus}>{selectedBooking.status === 'pending' ? '⏳ În așteptare' : '✓ Confirmat'}</Text>
             </View>
             <TouchableOpacity onPress={() => { setModal(null); setSelectedCell(null); }}>
               <Text style={styles.closeX}>✕</Text>
@@ -513,50 +654,18 @@ export default function CoachCalendarScreen({ navigation }) {
               <Text style={styles.closeX}>✕</Text>
             </TouchableOpacity>
           </View>
-
           <Text style={styles.label}>Începând cu</Text>
           <View style={styles.dateTimeRow}>
-            <input
-              type="date"
-              style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', marginRight: 8, backgroundColor: '#F8F9FA' }}
-              value={blockStartDate}
-              onChange={e => setBlockStartDate(e.target.value)}
-            />
-            <input
-              type="time"
-              step="300"
-              style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: '#F8F9FA' }}
-              value={blockStartTime}
-              onChange={e => setBlockStartTime(e.target.value)}
-            />
+            <input type="date" style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', marginRight: 8, backgroundColor: '#F8F9FA' }} value={blockStartDate} onChange={e => setBlockStartDate(e.target.value)} />
+            <input type="time" step="300" style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: '#F8F9FA' }} value={blockStartTime} onChange={e => setBlockStartTime(e.target.value)} />
           </View>
-
           <Text style={styles.label}>Până în</Text>
           <View style={styles.dateTimeRow}>
-            <input
-              type="date"
-              style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', marginRight: 8, backgroundColor: '#F8F9FA' }}
-              value={blockEndDate || blockStartDate}
-              onChange={e => setBlockEndDate(e.target.value)}
-            />
-            <input
-              type="time"
-              step="300"
-              style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: '#F8F9FA' }}
-              value={blockEndTime}
-              onChange={e => setBlockEndTime(e.target.value)}
-            />
+            <input type="date" style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', marginRight: 8, backgroundColor: '#F8F9FA' }} value={blockEndDate || blockStartDate} onChange={e => setBlockEndDate(e.target.value)} />
+            <input type="time" step="300" style={{ flex: 1, padding: 12, fontSize: 15, borderRadius: 10, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: '#F8F9FA' }} value={blockEndTime} onChange={e => setBlockEndTime(e.target.value)} />
           </View>
-
           <Text style={styles.label}>Motiv (opțional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ex: Concediu, Pauză, etc."
-            placeholderTextColor={colors.textSecondary}
-            value={blockReason}
-            onChangeText={setBlockReason}
-          />
-
+          <TextInput style={styles.input} placeholder="Ex: Concediu, Pauză, etc." placeholderTextColor={colors.textSecondary} value={blockReason} onChangeText={setBlockReason} />
           <TouchableOpacity style={[styles.btnConfirm, { marginTop: 8 }]} onPress={handleBlock}>
             <Text style={styles.btnConfirmText}>Confirmă blocarea</Text>
           </TouchableOpacity>
@@ -572,85 +681,43 @@ export default function CoachCalendarScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           <Text style={styles.modalTime}>{selectedSlot.displayDate} · {selectedSlot.startTime} - {selectedSlot.endTime}</Text>
-
           <Text style={styles.label}>Tip sesiune</Text>
           <View style={styles.modalBtns}>
-            <TouchableOpacity
-              style={[styles.btnCancel, sessionType === 'one_to_one' && styles.btnConfirm]}
-              onPress={() => setSessionType('one_to_one')}
-            >
+            <TouchableOpacity style={[styles.btnCancel, sessionType === 'one_to_one' && styles.btnConfirm]} onPress={() => setSessionType('one_to_one')}>
               <Text style={[styles.btnCancelText, sessionType === 'one_to_one' && styles.btnConfirmText]}>👤 One to One</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btnCancel, sessionType === 'group' && styles.btnConfirm]}
-              onPress={() => setSessionType('group')}
-            >
+            <TouchableOpacity style={[styles.btnCancel, sessionType === 'group' && styles.btnConfirm]} onPress={() => setSessionType('group')}>
               <Text style={[styles.btnCancelText, sessionType === 'group' && styles.btnConfirmText]}>👥 Grup</Text>
             </TouchableOpacity>
           </View>
-
           <Text style={styles.label}>Caută client</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Caută după nume sau telefon..."
-            placeholderTextColor={colors.textSecondary}
-            value={clientSearch}
-            onChangeText={setClientSearch}
-          />
-
+          <TextInput style={styles.input} placeholder="Caută după nume sau telefon..." placeholderTextColor={colors.textSecondary} value={clientSearch} onChangeText={setClientSearch} />
           {filteredClients.length > 0 && (
             <ScrollView style={{ maxHeight: 150 }}>
               {filteredClients.map(client => (
-                <TouchableOpacity
-                  key={client.id}
-                  style={[styles.clientRow, selectedClient?.id === client.id && styles.clientRowSelected]}
-                  onPress={() => { setSelectedClient(client); setClientSearch(''); setShowNewClient(false); }}
-                >
+                <TouchableOpacity key={client.id} style={[styles.clientRow, selectedClient?.id === client.id && styles.clientRowSelected]} onPress={() => { setSelectedClient(client); setClientSearch(''); setShowNewClient(false); }}>
                   <Text style={styles.clientName}>{client.full_name || 'Client'}</Text>
                   <Text style={styles.clientPhone}>{client.phone || ''}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           )}
-
           {selectedClient && !showNewClient && (
             <View style={styles.selectedClientRow}>
               <Text style={styles.selectedClientText}>✓ {selectedClient.full_name}</Text>
-              <TouchableOpacity onPress={() => setSelectedClient(null)}>
-                <Text style={styles.closeX}>✕</Text>
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSelectedClient(null)}><Text style={styles.closeX}>✕</Text></TouchableOpacity>
             </View>
           )}
-
           <TouchableOpacity style={styles.addClientBtn} onPress={() => { setShowNewClient(!showNewClient); setSelectedClient(null); }}>
             <Text style={styles.addClientBtnText}>+ Adaugă client nou fără cont</Text>
           </TouchableOpacity>
-
           {showNewClient && (
             <View>
-              <TextInput
-                style={styles.input}
-                placeholder="Nume complet"
-                placeholderTextColor={colors.textSecondary}
-                value={newClientName}
-                onChangeText={setNewClientName}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Telefon"
-                placeholderTextColor={colors.textSecondary}
-                value={newClientPhone}
-                onChangeText={setNewClientPhone}
-                keyboardType="phone-pad"
-              />
+              <TextInput style={styles.input} placeholder="Nume complet" placeholderTextColor={colors.textSecondary} value={newClientName} onChangeText={setNewClientName} />
+              <TextInput style={styles.input} placeholder="Telefon" placeholderTextColor={colors.textSecondary} value={newClientPhone} onChangeText={setNewClientPhone} keyboardType="phone-pad" />
             </View>
           )}
-
-          <TouchableOpacity
-            style={[styles.btnConfirm, { marginTop: 12 }, !selectedClient && !showNewClient && styles.btnDisabled]}
-            onPress={handleManualBooking}
-            disabled={!selectedClient && !showNewClient}
-          >
+          <TouchableOpacity style={[styles.btnConfirm, { marginTop: 12 }, !selectedClient && !showNewClient && styles.btnDisabled]} onPress={handleManualBooking} disabled={!selectedClient && !showNewClient}>
             <Text style={styles.btnConfirmText}>Confirmă programarea</Text>
           </TouchableOpacity>
         </View>
@@ -661,9 +728,7 @@ export default function CoachCalendarScreen({ navigation }) {
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalName}>🔒 Interval blocat</Text>
-              <Text style={styles.modalTime}>
-                {selectedBooking.start_time?.slice(0, 5)} - {selectedBooking.end_time?.slice(0, 5)}
-              </Text>
+              <Text style={styles.modalTime}>{selectedBooking.start_time?.slice(0, 5)} - {selectedBooking.end_time?.slice(0, 5)}</Text>
               {selectedBooking.reason && <Text style={styles.modalStatus}>{selectedBooking.reason}</Text>}
             </View>
             <TouchableOpacity onPress={() => { setModal(null); setSelectedCell(null); }}>
@@ -675,15 +740,17 @@ export default function CoachCalendarScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </>
   );
+
+  return isMobile ? renderMobileView() : renderDesktopView();
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 48, paddingBottom: 8 },
   backText: { fontSize: 16, color: colors.primary, fontWeight: '500' },
-  title: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
+  title: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
   weekNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
   navBtn: { fontSize: 22, color: colors.primary, paddingHorizontal: 8 },
   weekLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
@@ -694,17 +761,31 @@ const styles = StyleSheet.create({
   dayHeaderCircleToday: { backgroundColor: colors.primary },
   dayHeaderNum: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   dayHeaderNumToday: { color: '#fff' },
-  gridScroll: { flex: 1 },gymLabel: { fontSize: 11, color: colors.primary, fontWeight: '600', marginTop: 2, textAlign: 'center' },
-
-hourText: { fontSize: 14, color: '#1A1A2E', paddingLeft: 4, fontWeight: '700', lineHeight: 20 },
+  gymLabel: { fontSize: 9, color: colors.primary, fontWeight: '600', marginTop: 2, textAlign: 'center' },
+  gridScroll: { flex: 1 },
+  hourText: { fontSize: 14, color: colors.textPrimary, paddingLeft: 4, fontWeight: '700', lineHeight: 20 },
   availBlock: { position: 'absolute', left: 1, right: 1, backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: colors.border, padding: 2, zIndex: 1 },
-availBlockTime: { fontSize: 12, color: colors.textPrimary, fontWeight: '600' },
-  bookingBlock: { position: 'absolute', left: 1, right: 1, borderRadius: 4, padding: 3, zIndex: 10 },
+  availBlockTime: { fontSize: 12, color: colors.textPrimary, fontWeight: '600' },
+  availBlockGym: { fontSize: 10, color: colors.primary, fontWeight: '500' },
+  bookingBlock: { position: 'absolute', left: 1, right: 1, borderRadius: 4, padding: 4, zIndex: 10 },
   bookingConfirmed: { backgroundColor: '#b7f5c4', borderLeftWidth: 3, borderLeftColor: '#2ecc71' },
   bookingPending: { backgroundColor: '#fff3b0', borderLeftWidth: 3, borderLeftColor: '#f1c40f' },
   blockedBlock: { backgroundColor: '#f0f0f0', borderLeftWidth: 3, borderLeftColor: '#999' },
-  bookingName: { fontSize: 10, fontWeight: '700', color: colors.textPrimary },
-  bookingTime: { fontSize: 9, color: colors.textSecondary },
+  bookingName: { fontSize: 12, fontWeight: '700', color: colors.textPrimary },
+  bookingTime: { fontSize: 11, color: colors.textSecondary },
+  // Mobile
+  mobileDaysBar: { paddingHorizontal: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  mobileDayItem: { alignItems: 'center', marginHorizontal: 8, minWidth: 40 },
+  mobileDayName: { fontSize: 12, color: colors.textSecondary, marginBottom: 4, fontWeight: '500' },
+  mobileDayNameSelected: { color: colors.primary },
+  mobileDayPast: { color: '#ccc' },
+  mobileDayCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  mobileDayCircleToday: { borderWidth: 2, borderColor: colors.primary },
+  mobileDayCircleSelected: { backgroundColor: colors.primary },
+  mobileDayNum: { fontSize: 15, color: colors.textPrimary },
+  mobileDayNumSelected: { color: '#fff', fontWeight: '800' },
+  mobileGrid: { flex: 1 },
+  // Modals
   modal: { backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 8 },
   modalScroll: { backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: 550, position: 'absolute', bottom: 0, left: 0, right: 0, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8 },
   modalScrollContent: { padding: 20 },
@@ -723,7 +804,6 @@ availBlockTime: { fontSize: 12, color: colors.textPrimary, fontWeight: '600' },
   btnDisabled: { backgroundColor: colors.border },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 15, marginBottom: 12, marginTop: 4, backgroundColor: colors.surface, color: colors.textPrimary },
   label: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 4, marginTop: 8 },
-  empty: { color: colors.textSecondary, fontSize: 14, textAlign: 'center', marginVertical: 16 },
   clientRow: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 8, backgroundColor: colors.surface },
   clientRowSelected: { borderColor: colors.primary, backgroundColor: '#F0FDFA' },
   clientName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },

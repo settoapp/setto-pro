@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { supabase } from '../supabase';
 import { colors } from '../theme';
 
@@ -9,7 +9,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
   const [sport, setSport] = useState('');
   const [bio, setBio] = useState('');
-  const [price, setPrice] = useState('');
   const [gyms, setGyms] = useState([]);
   const [selectedGyms, setSelectedGyms] = useState([]);
   const [gymSearch, setGymSearch] = useState('');
@@ -28,7 +27,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
       if (coach) {
         if (coach.sport_types?.[0]) setSport(coach.sport_types[0]);
         if (coach.bio) setBio(coach.bio);
-        if (coach.price_per_session) setPrice(String(coach.price_per_session));
         if (coach.gym_ids) setSelectedGyms(coach.gym_ids);
       }
     }
@@ -44,8 +42,8 @@ export default function CoachProfileSetupScreen({ navigation }) {
   }
 
   async function handleSave() {
-    if (!fullName || !sport || !price) {
-      Alert.alert('Eroare', 'Completează numele, sportul și prețul.');
+    if (!fullName || !sport) {
+      Alert.alert('Eroare', 'Completează numele și sportul.');
       return;
     }
     setLoading(true);
@@ -57,7 +55,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
       id: user.id,
       sport_types: [sport],
       bio,
-      price_per_session: parseFloat(price),
       gym_ids: selectedGyms.length > 0 ? selectedGyms : null,
     }, { onConflict: 'id' });
 
@@ -73,9 +70,10 @@ export default function CoachProfileSetupScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+<SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backText}>← Înapoi</Text>
           </TouchableOpacity>
@@ -117,16 +115,6 @@ export default function CoachProfileSetupScreen({ navigation }) {
           textAlignVertical="top"
         />
 
-        <Text style={styles.label}>Preț per sesiune (lei)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: 150"
-          placeholderTextColor={colors.textSecondary}
-          value={price}
-          onChangeText={setPrice}
-          keyboardType="numeric"
-        />
-
         <Text style={styles.label}>Săli unde activezi</Text>
         <TextInput
           style={styles.input}
@@ -155,9 +143,9 @@ export default function CoachProfileSetupScreen({ navigation }) {
           </View>
         )}
 
-        {gymSearch.length > 0 && (
-          <ScrollView style={{ maxHeight: 250, marginBottom: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}>
-            {gyms.filter(g =>
+{gymSearch.length > 0 && (
+          <ScrollView style={{ maxHeight: 200, marginBottom: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 12, maxHeight: 150 }}>
+                      {gyms.filter(g =>
               g.name.toLowerCase().includes(gymSearch.toLowerCase()) &&
               !selectedGyms.includes(g.id)
             ).map(gym => (
@@ -180,9 +168,10 @@ export default function CoachProfileSetupScreen({ navigation }) {
         >
           <Text style={styles.buttonText}>{loading ? 'Se salvează...' : 'Salvează profilul'}</Text>
         </TouchableOpacity>
-      </ScrollView>
+</ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-  );
+      );
 }
 
 const styles = StyleSheet.create({
