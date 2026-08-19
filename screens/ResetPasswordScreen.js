@@ -13,12 +13,15 @@ export default function ResetPasswordScreen({ navigation }) {
   useEffect(() => {
     async function handleToken() {
       if (typeof window !== 'undefined') {
-        const hash = window.location.hash;
-        if (hash && hash.includes('access_token')) {
-          const params = new URLSearchParams(hash.substring(1));
+        const fullUrl = window.location.href;
+        const hashIndex = fullUrl.indexOf('#');
+        if (hashIndex !== -1) {
+          const hash = fullUrl.substring(hashIndex + 1);
+          const params = new URLSearchParams(hash);
           const accessToken = params.get('access_token');
           const refreshToken = params.get('refresh_token');
-          if (accessToken && refreshToken) {
+          const type = params.get('type');
+          if (accessToken && refreshToken && type === 'recovery') {
             const { error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
@@ -26,6 +29,8 @@ export default function ResetPasswordScreen({ navigation }) {
             if (error) {
               setError('Link invalid sau expirat. Solicită un link nou.');
             }
+          } else {
+            setError('Link invalid sau expirat. Solicită un link nou.');
           }
         } else {
           setError('Link invalid sau expirat. Solicită un link nou.');
@@ -34,6 +39,7 @@ export default function ResetPasswordScreen({ navigation }) {
     }
     handleToken();
   }, []);
+
   async function handleReset() {
     if (!password || !confirmPassword) {
       setError('Completează ambele câmpuri.');
