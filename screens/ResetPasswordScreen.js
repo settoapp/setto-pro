@@ -10,6 +10,26 @@ export default function ResetPasswordScreen({ navigation }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    async function handleToken() {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash;
+        if (hash && hash.includes('access_token')) {
+          const params = new URLSearchParams(hash.substring(1));
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+          }
+        }
+      }
+    }
+    handleToken();
+  }, []);
+
   async function handleReset() {
     if (!password || !confirmPassword) {
       setError('Completează ambele câmpuri.');
