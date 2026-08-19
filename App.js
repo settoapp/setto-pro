@@ -37,18 +37,21 @@ export default function App() {
 
   useEffect(() => {
     async function checkUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', user.id)
-          .single();
+          .eq('id', session.user.id)
+          .maybeSingle();
         if (profile?.role === 'coach') {
           setInitialRoute('CoachHome');
         } else {
           await supabase.auth.signOut();
+          setInitialRoute('Login');
         }
+      } else {
+        setInitialRoute('Login');
       }
       setLoading(false);
     }
