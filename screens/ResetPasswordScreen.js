@@ -32,8 +32,8 @@ export default function ResetPasswordScreen({ navigation }) {
           } else {
             setError('Link invalid sau expirat. Solicită un link nou.');
           }
-        } else {
-          setError('Link invalid sau expirat. Solicită un link nou.');
+                } else {
+          // Nu avem hash - probabil pagina e accesată direct, nu prin link
         }
       }
     }
