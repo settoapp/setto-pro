@@ -14,10 +14,11 @@ export default function ResetPasswordScreen({ navigation }) {
   useEffect(() => {
     async function handleToken() {
       if (typeof window !== 'undefined') {
-        const fullUrl = window.location.href;
-        const hashIndex = fullUrl.indexOf('#');
-        if (hashIndex !== -1) {
-          const hash = fullUrl.substring(hashIndex + 1);
+        const savedHash = sessionStorage.getItem('supabase_hash');
+        const rawHash = savedHash || window.location.hash;
+        const hash = rawHash.startsWith('#') ? rawHash.substring(1) : rawHash;
+        if (hash && hash.includes('access_token')) {
+          sessionStorage.removeItem('supabase_hash');
           const params = new URLSearchParams(hash);
           const accessToken = params.get('access_token');
           const refreshToken = params.get('refresh_token');
