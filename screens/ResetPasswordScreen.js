@@ -19,17 +19,21 @@ export default function ResetPasswordScreen({ navigation }) {
           const accessToken = params.get('access_token');
           const refreshToken = params.get('refresh_token');
           if (accessToken && refreshToken) {
-            await supabase.auth.setSession({
+            const { error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
+            if (error) {
+              setError('Link invalid sau expirat. Solicită un link nou.');
+            }
           }
+        } else {
+          setError('Link invalid sau expirat. Solicită un link nou.');
         }
       }
     }
     handleToken();
   }, []);
-
   async function handleReset() {
     if (!password || !confirmPassword) {
       setError('Completează ambele câmpuri.');
