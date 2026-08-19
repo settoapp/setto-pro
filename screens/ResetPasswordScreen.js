@@ -9,6 +9,7 @@ export default function ResetPasswordScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
     async function handleToken() {
@@ -28,12 +29,12 @@ export default function ResetPasswordScreen({ navigation }) {
             });
             if (error) {
               setError('Link invalid sau expirat. Solicită un link nou.');
+            } else {
+              setSessionReady(true);
             }
           } else {
             setError('Link invalid sau expirat. Solicită un link nou.');
           }
-                } else {
-          // Nu avem hash - probabil pagina e accesată direct, nu prin link
         }
       }
     }
@@ -85,35 +86,39 @@ export default function ResetPasswordScreen({ navigation }) {
               </View>
             ) : null}
 
-            <Text style={styles.inputLabel}>Parolă nouă</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Minim 6 caractere"
-              placeholderTextColor={colors.textSecondary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            {sessionReady && (
+              <>
+                <Text style={styles.inputLabel}>Parolă nouă</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Minim 6 caractere"
+                  placeholderTextColor={colors.textSecondary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
 
-            <Text style={styles.inputLabel}>Confirmă parola</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Repetă parola"
-              placeholderTextColor={colors.textSecondary}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              onSubmitEditing={handleReset}
-              returnKeyType="done"
-            />
+                <Text style={styles.inputLabel}>Confirmă parola</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Repetă parola"
+                  placeholderTextColor={colors.textSecondary}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  onSubmitEditing={handleReset}
+                  returnKeyType="done"
+                />
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleReset}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>{loading ? 'Se salvează...' : 'Salvează parola nouă'}</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={handleReset}
+                  disabled={loading}
+                >
+                  <Text style={styles.buttonText}>{loading ? 'Se salvează...' : 'Salvează parola nouă'}</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </>
         ) : (
           <View style={styles.successContainer}>
