@@ -27,11 +27,7 @@ export default function ResetPasswordScreen({ navigation }) {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            if (error && !error.message.includes('future')) {
-              setError('Link invalid sau expirat. Solicită un link nou.');
-            } else {
-              setSessionReady(true);
-            }
+            setSessionReady(true);
           } else {
             setError('Link invalid sau expirat. Solicită un link nou.');
           }
