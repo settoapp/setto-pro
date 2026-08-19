@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { supabase } from '../supabase';
 import { colors } from '../theme';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Platform } from 'react-native';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -37,6 +38,22 @@ export default function LoginScreen({ navigation }) {
     } else {
       await supabase.auth.signOut();
       setError('Acest cont nu este de antrenor.');
+    }
+  }  
+  async function handleForgotPassword() {
+    if (!email) {
+      setError('Introdu emailul tău mai întâi.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://pro.setto.ro/reset-password',
+    });
+    if (error) {
+      setError(error.message);
+    } else {
+      if (Platform.OS === 'web') {
+        window.alert('Email trimis! Verifică-ți căsuța de email.');
+      }
     }
   }
 
@@ -89,6 +106,10 @@ export default function LoginScreen({ navigation }) {
             <Text style={styles.buttonText}>{loading ? 'Se încarcă...' : 'Intră în cont'}</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity style={{ alignItems: 'center', marginBottom: 16 }} onPress={handleForgotPassword}>
+          <Text style={styles.footerLink}>Ai uitat parola?</Text>
+        </TouchableOpacity>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Nu ai cont? </Text>
