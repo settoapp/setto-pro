@@ -21,7 +21,7 @@ const linking = {
     screens: {
       Login: 'login',
       Register: 'register',
-      CoachHome: '',
+      CoachHome: 'acasa',
       CoachProfileSetup: 'profil',
       CoachAvailability: 'disponibilitate',
       CoachBookings: 'rezervari',
