@@ -12,6 +12,7 @@ import CoachBookingsScreen from './screens/CoachBookingsScreen';
 import CoachCalendarScreen from './screens/CoachCalendarScreen';
 import ClientProfileScreen from './screens/ClientProfileScreen';
 import { colors } from './theme';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -76,6 +77,7 @@ export default function App() {
         <Stack.Screen name="CoachAvailability" component={CoachAvailabilityScreen} />
         <Stack.Screen name="CoachBookings" component={CoachBookingsScreen} />
         <Stack.Screen name="CoachCalendar" component={CoachCalendarScreen} />
+                <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="ClientProfile" component={ClientProfileScreen} />
       </Stack.Navigator>
     </NavigationContainer>

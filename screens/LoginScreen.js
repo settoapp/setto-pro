@@ -39,22 +39,6 @@ export default function LoginScreen({ navigation }) {
       setError('Acest cont nu este de antrenor.');
     }
   }  
-  async function handleForgotPassword() {
-    if (!email) {
-      setError('Introdu emailul tău mai întâi.');
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://pro.setto.ro/reset-password',
-    });
-    if (error) {
-      setError(error.message);
-    } else {
-      if (Platform.OS === 'web') {
-        window.alert('Email trimis! Verifică-ți căsuța de email.');
-      }
-    }
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -106,7 +90,7 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={{ alignItems: 'center', marginBottom: 16 }} onPress={handleForgotPassword}>
+        <TouchableOpacity style={{ alignItems: 'center', marginBottom: 16 }} onPress={() => navigation.navigate('ForgotPassword')}>
           <Text style={styles.footerLink}>Ai uitat parola?</Text>
         </TouchableOpacity>
 
