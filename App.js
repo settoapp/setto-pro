@@ -13,6 +13,7 @@ import CoachCalendarScreen from './screens/CoachCalendarScreen';
 import ClientProfileScreen from './screens/ClientProfileScreen';
 import { colors } from './theme';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,6 +29,7 @@ const linking = {
       CoachBookings: 'rezervari',
       CoachCalendar: 'calendar',
       ClientProfile: 'client/:clientId',
+      ResetPassword: 'reset-password',
     },
   },
 };
@@ -78,6 +80,7 @@ export default function App() {
         <Stack.Screen name="CoachBookings" component={CoachBookingsScreen} />
         <Stack.Screen name="CoachCalendar" component={CoachCalendarScreen} />
                 <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+                <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="ClientProfile" component={ClientProfileScreen} />
       </Stack.Navigator>
     </NavigationContainer>
