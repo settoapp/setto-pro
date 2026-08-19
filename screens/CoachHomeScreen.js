@@ -1,8 +1,19 @@
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { useEffect } from 'react';
 import { supabase } from '../supabase';
 import { colors } from '../theme';
 
 export default function CoachHomeScreen({ navigation }) {
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigation.replace('Login');
+      }
+    }
+    checkAuth();
+  }, []);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     navigation.navigate('Login');
